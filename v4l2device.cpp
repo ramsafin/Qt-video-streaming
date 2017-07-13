@@ -95,7 +95,7 @@ void V4L2Device::init_device() {
     init_mmap();
 }
 
-/* NOTE: vulnarable place -> clear buffers if error */
+/* NOTE: vulnarable place - buffers if error */
 void V4L2Device::uninit_device() {
     for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
         if (munmap(_buffers[i].start, _buffers[i].length) == -1) {
@@ -134,9 +134,7 @@ void V4L2Device::query_capability() {
 
 void V4L2Device::query_format() {
 
-    struct v4l2_format format;
-
-    CLEAR(format);
+    struct v4l2_format format = {0};
 
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
@@ -180,9 +178,7 @@ void V4L2Device::query_format() {
 
 void V4L2Device::init_fps() {
 
-    struct v4l2_streamparm stream_param;
-
-    CLEAR(stream_param);
+    struct v4l2_streamparm stream_param = {0};
 
     stream_param.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
@@ -213,9 +209,7 @@ void V4L2Device::init_buffers() {
 
 void V4L2Device::init_mmap() {
 
-    struct v4l2_requestbuffers req_buffers;
-
-    CLEAR(req_buffers);
+    struct v4l2_requestbuffers req_buffers = {0};
 
     req_buffers.count  = _parameters.n_buffers;
     req_buffers.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -240,9 +234,7 @@ void V4L2Device::init_mmap() {
     /* put application buffers into driver's incoming queue */
     for (unsigned int buffer_idx = 0; buffer_idx < req_buffers.count; ++buffer_idx) {
 
-        struct v4l2_buffer buf;
-
-        CLEAR(buf);
+        struct v4l2_buffer buf = {0};
 
         buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
@@ -278,9 +270,7 @@ void V4L2Device::startCapturing() {
         // query buffers
         for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
 
-            struct v4l2_buffer buf;
-
-            CLEAR(buf);
+            struct v4l2_buffer buf = {0};
 
             buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
             buf.memory = V4L2_MEMORY_MMAP;
@@ -343,8 +333,7 @@ bool V4L2Device::is_stream_readable() {
     FD_ZERO(&fds);
     FD_SET(_fd, &fds);
 
-    struct timeval tval;
-    CLEAR(tval);
+    struct timeval tval = {0};
     tval.tv_sec = 2;
 
     return select(_fd + 1, &fds, NULL, NULL, &tval);
@@ -353,9 +342,7 @@ bool V4L2Device::is_stream_readable() {
 // TODO return frame in some way (structure, or something else)
 bool V4L2Device::read_frame() {
 
-    struct v4l2_buffer buf;
-
-    CLEAR(buf);
+    struct v4l2_buffer buf = {0};
 
     buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;

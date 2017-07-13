@@ -13,8 +13,6 @@
 #define HEIGHT 320
 #define WIDTH  240
 
-#define CLEAR(x) memset(&x, 0, sizeof(x))
-
 /* video buffer structure */
 typedef struct {
     void *start = nullptr;    // pointer to the buffer data
