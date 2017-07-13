@@ -1,17 +1,31 @@
-#include <QApplication>
-#include "mainwindow.h"
 #include "v4l2device.h"
+#include <thread>
+#include <chrono>
 
 int main(int argc, char *argv[])
 {
-//    QApplication a(argc, argv);
-//    MainWindow window;
-//    window.show();
-    v4l2_device_param params = {};
-    params.force_format = true;
 
-    V4L2Device device(params);
+    v4l2_device_param p;
 
-//    return a.exec();
+    p.height = 720;
+    p.width = 1280;
+    p.n_buffers = 15;
+
+    V4L2Device device(p);
+
+    device.startCapturing();
+
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+
+    device.stopCapturing();
+
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+
+    device.startCapturing();
+
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+
+    std::cout << "end" << std::endl;
+
     return 0;
 }
