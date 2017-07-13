@@ -24,18 +24,27 @@ static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
 
 // ========= V4L2Device class ========== //
 
-V4L2Device::V4L2Device(const v4l2_device_param &parameters) : _parameters(parameters), _is_capturing(false) {
+V4L2Device::V4L2Device() :
+    _is_capturing(false), _parameters(v4l2_device_param()), _force_format(false)
+{
     open_device();
     init_device();
-    start_capturing();
-    stream();
+}
+
+V4L2Device::V4L2Device(const v4l2_device_param &parameters) :
+    _is_capturing(false), _parameters(parameters), _force_format(true)
+{
+    open_device();
+    init_device();
 }
 
 V4L2Device::~V4L2Device() {
-    stop_capturing();
+    stopCapturing();
     uninit_device();
     close_device();
 }
+
+// ============================================== //
 
 void V4L2Device::open_device() {
 
@@ -60,54 +69,42 @@ void V4L2Device::open_device() {
         throw std::runtime_error(_parameters.dev_name + ": cannot open! " + std::to_string(errno) + ": " + strerror(errno));
     }
 
+    std::cout << "device handle: " << _fd << std::endl;
 }
 
-void V4L2Device::init_mmap() {
-
-    struct v4l2_requestbuffers req_buffers = {0};
-
-    req_buffers.count = _parameters.n_buffers;
-    req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    req_buffers.memory = V4L2_MEMORY_MMAP;
-
-    /* establish a set of buffers between the application and video driver */
-    if (v4l2_ioctl(_fd, VIDIOC_REQBUFS, &req_buffers) == -1) {
-        if (errno == EINVAL) {
-            throw std::runtime_error(_parameters.dev_name + " doesn't support memory mapping");
-        } else {
-            throw std::runtime_error("VIDIOC_REQBUFS");
-        }
+void V4L2Device::close_device() {
+    if (close(_fd) == -1) {
+        throw std::runtime_error(_parameters.dev_name + " cannot close! " + std::to_string(errno) + ": " + strerror(errno));
     }
 
-    /* driver could allocate less number of buffers */
-    if (req_buffers.count != _parameters.n_buffers) {
-        throw std::runtime_error("Invalid requested buffers number");
-    }
+    _fd = -1;
+}
 
-    std::cout << "Buffers number: " << _parameters.n_buffers << std::endl;
+// =============================================== //
 
-    /* put application buffers into driver's incoming queue */
-    for (unsigned int buffer_idx = 0; buffer_idx < req_buffers.count; ++buffer_idx) {
+void V4L2Device::init_device() {
 
-        struct v4l2_buffer buf = {0};
+    query_capability();
 
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
-        buf.index = buffer_idx;
+    query_format();
 
-        if (v4l2_ioctl(_fd, VIDIOC_QUERYBUF, &buf)) {
-            throw std::runtime_error("VIDIOC_QUERYBUF");
-        }
+    init_fps();
 
-        _buffers[buffer_idx].length = buf.length;
-        _buffers[buffer_idx].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
-                                          MAP_SHARED, _fd, buf.m.offset);
+    init_buffers();
 
-        if (MAP_FAILED == _buffers[buffer_idx].start) {
-            throw std::runtime_error("MMAP");
+    init_mmap();
+}
+
+/* NOTE: vulnarable place -> clear buffers if error */
+void V4L2Device::uninit_device() {
+    for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
+        if (munmap(_buffers[i].start, _buffers[i].length) == -1) {
+            throw std::runtime_error(std::string(strerror(errno)) + ". MUNMAP");
         }
     }
 }
+
+// =============================================== //
 
 void V4L2Device::query_capability() {
 
@@ -135,26 +132,21 @@ void V4L2Device::query_capability() {
     this->_capability = capability;
 }
 
-void V4L2Device::close_device() {
-    if (close(_fd) == -1) {
-        throw std::runtime_error(_parameters.dev_name + " cannot close! " + std::to_string(errno) + ": " + strerror(errno));
-    }
-
-    _fd = -1;
-}
-
 void V4L2Device::query_format() {
 
-    struct v4l2_format format = {0};
+    struct v4l2_format format;
+
+    CLEAR(format);
 
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    if (_parameters.force_format) {
+    if (_force_format) {
 
+        /* See what device supports with v4l2-ctl utility */
         format.fmt.pix.width        = _parameters.width;
         format.fmt.pix.height       = _parameters.height;
-        format.fmt.pix.pixelformat  = _parameters.pixel_format; // see what device supports
         format.fmt.pix.field        = _parameters.pix_field;
+        format.fmt.pix.pixelformat  = _parameters.pixel_format;
 
         if (v4l2_ioctl(_fd, VIDIOC_S_FMT, &format) == -1) {
             throw std::runtime_error("VIDIOC_S_FMT");
@@ -164,6 +156,7 @@ void V4L2Device::query_format() {
             throw std::runtime_error(_parameters.dev_name + " does not support current format");
         }
 
+        // TODO find out field format
         // VIDIOC_S_FMT may change width and height
         _parameters.width     = format.fmt.pix.width;
         _parameters.height    = format.fmt.pix.height;
@@ -174,6 +167,12 @@ void V4L2Device::query_format() {
         if (v4l2_ioctl(_fd, VIDIOC_G_FMT, &format) == -1) {
             throw std::runtime_error("VIDIOC_G_FMT");
         }
+
+        // save parameters
+        _parameters.width        = format.fmt.pix.width;
+        _parameters.height       = format.fmt.pix.height;
+        _parameters.pix_field    = format.fmt.pix.field;
+        _parameters.pixel_format = format.fmt.pix.pixelformat;
     }
 
     printf("Size: %d x %d\n", format.fmt.pix.width, format.fmt.pix.height);
@@ -181,7 +180,9 @@ void V4L2Device::query_format() {
 
 void V4L2Device::init_fps() {
 
-    struct v4l2_streamparm stream_param = {0};
+    struct v4l2_streamparm stream_param;
+
+    CLEAR(stream_param);
 
     stream_param.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
@@ -193,29 +194,12 @@ void V4L2Device::init_fps() {
         std::cerr << "VIDIOC_S_PARM" << std::endl;
     }
 
+    // save parameters
+    _parameters.numerator   = stream_param.parm.capture.timeperframe.numerator;
+    _parameters.denominator = stream_param.parm.capture.timeperframe.denominator;
+
     std::cout << "FPS: " << stream_param.parm.capture.timeperframe.numerator << "/"
               << stream_param.parm.capture.timeperframe.denominator << std::endl;
-}
-
-void V4L2Device::init_device() {
-
-    query_capability();
-
-    query_format();
-
-    init_fps();
-
-    init_buffers();
-
-    init_mmap();
-}
-
-void V4L2Device::uninit_device() {
-    for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
-        if (munmap(_buffers[i].start, _buffers[i].length) == -1) {
-            throw std::runtime_error(std::string(strerror(errno)) + ". MUNMAP");
-        }
-    }
 }
 
 void V4L2Device::init_buffers() {
@@ -223,54 +207,134 @@ void V4L2Device::init_buffers() {
     _buffers.reserve(_parameters.n_buffers);
 
     for (unsigned int i = _parameters.n_buffers; i > 0; --i) {
-
+        _buffers.push_back(Buffer());
     }
 }
 
-void V4L2Device::start_capturing() {
+void V4L2Device::init_mmap() {
 
-    enum v4l2_buf_type type;
+    struct v4l2_requestbuffers req_buffers;
 
-    // query buffers
-    for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
+    CLEAR(req_buffers);
 
-        struct v4l2_buffer buf = {0};
+    req_buffers.count  = _parameters.n_buffers;
+    req_buffers.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req_buffers.memory = V4L2_MEMORY_MMAP;
 
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        buf.memory = V4L2_MEMORY_MMAP;
-        buf.index = i;
-
-        if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
-            throw std::runtime_error("VIDIOC_QBUF");
+    /* establish a set of buffers between the application and video driver */
+    if (v4l2_ioctl(_fd, VIDIOC_REQBUFS, &req_buffers) == -1) {
+        if (errno == EINVAL) {
+            throw std::runtime_error(_parameters.dev_name + " doesn't support memory mapping");
+        } else {
+            throw std::runtime_error("VIDIOC_REQBUFS");
         }
     }
 
-    type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-    // start capture
-    if (v4l2_ioctl(_fd, VIDIOC_STREAMON, &type) == -1) {
-        throw std::runtime_error("VIDIOC_STREAMON");
+    /* driver could allocate less number of buffers */
+    if (req_buffers.count != _parameters.n_buffers) {
+        throw std::runtime_error("Invalid requested buffers number");
     }
 
-    // set the flag
-    _is_capturing = true;
-}
+    std::cout << "Buffers number: " << _parameters.n_buffers << std::endl;
 
-void V4L2Device::stop_capturing() {
+    /* put application buffers into driver's incoming queue */
+    for (unsigned int buffer_idx = 0; buffer_idx < req_buffers.count; ++buffer_idx) {
 
-    enum v4l2_buf_type type;
+        struct v4l2_buffer buf;
 
-    type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        CLEAR(buf);
 
-    std::cout << "stop capturing" << std::endl;
+        buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buf.memory = V4L2_MEMORY_MMAP;
+        buf.index  = buffer_idx;
 
-    if (v4l2_ioctl(_fd, VIDIOC_STREAMOFF, &type) == -1) {
-        throw std::runtime_error("VIDIOC_STREAMOFF");
+        if (v4l2_ioctl(_fd, VIDIOC_QUERYBUF, &buf)) {
+            throw std::runtime_error("VIDIOC_QUERYBUF");
+        }
+
+        _buffers[buffer_idx].length = buf.length;
+
+        /* vulnarable place, use smart pointer -> less effective */
+        _buffers[buffer_idx].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
+                                          MAP_SHARED, _fd, buf.m.offset);
+
+        /* couldn't map memory. See mmap spec */
+        if (MAP_FAILED == _buffers[buffer_idx].start) {
+            throw std::runtime_error("MMAP");
+        }
     }
-
-    // set the flag
-    _is_capturing = false;
 }
+
+// =============================================== //
+
+void V4L2Device::startCapturing() {
+
+    if (!_is_capturing) { // we're not capturing yet
+
+        std::cout << "start capturing" << std::endl;
+
+        enum v4l2_buf_type type;
+
+        // query buffers
+        for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
+
+            struct v4l2_buffer buf;
+
+            CLEAR(buf);
+
+            buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+            buf.memory = V4L2_MEMORY_MMAP;
+            buf.index  = i;
+
+            if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
+                throw std::runtime_error("VIDIOC_QBUF");
+            }
+        }
+
+        type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+        // start capture
+        if (v4l2_ioctl(_fd, VIDIOC_STREAMON, &type) == -1) {
+            throw std::runtime_error("VIDIOC_STREAMON");
+        }
+
+        // set the flag
+        _is_capturing = true;
+    }
+}
+
+void V4L2Device::stopCapturing() {
+
+    if (_is_capturing) { // we're capturing
+
+        enum v4l2_buf_type type;
+
+        type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+        std::cout << "stop capturing" << std::endl;
+
+        if (v4l2_ioctl(_fd, VIDIOC_STREAMOFF, &type) == -1) {
+            throw std::runtime_error("VIDIOC_STREAMOFF");
+        }
+
+        // set the flag
+        _is_capturing = false;
+    }
+}
+
+bool V4L2Device::isCapturing() const {
+    return _is_capturing;
+}
+
+void V4L2Device::setIsCapturing(bool is_capturing) {
+    _is_capturing = is_capturing;
+}
+
+int V4L2Device::getFileDescriptor() const {
+    return _fd;
+}
+
+// =============================================== //
 
 bool V4L2Device::is_stream_readable() {
 
@@ -279,8 +343,9 @@ bool V4L2Device::is_stream_readable() {
     FD_ZERO(&fds);
     FD_SET(_fd, &fds);
 
-    struct timeval tval = {0};
-    tval.tv_sec = 1;
+    struct timeval tval;
+    CLEAR(tval);
+    tval.tv_sec = 2;
 
     return select(_fd + 1, &fds, NULL, NULL, &tval);
 }
@@ -288,9 +353,11 @@ bool V4L2Device::is_stream_readable() {
 // TODO return frame in some way (structure, or something else)
 bool V4L2Device::read_frame() {
 
-    struct v4l2_buffer buf = {0};
+    struct v4l2_buffer buf;
 
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    CLEAR(buf);
+
+    buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
 
     // get frame from driver's outgoing queue
@@ -299,6 +366,7 @@ bool V4L2Device::read_frame() {
             case EAGAIN:
                 return false;
             case EIO:
+                std::cerr << "EIO: " <<  strerror(errno) << std::endl;
                 /* Could ignore EIO see spec */
                 /* fall through */
             default:
@@ -308,22 +376,16 @@ bool V4L2Device::read_frame() {
 
     /*
      * See https://linuxtv.org/downloads/v4l-dvb-apis/uapi/v4l/buffer.html
+     * for buffer structure information
      */
 
     // TODO process image
-    // process_frame(buffers[buf.index].start, buf.bytesused);
-
-
 
     if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
         throw std::runtime_error("VIDIOC_QBUF");
     }
 
     return true;
-}
-
-bool V4L2Device::isCapturing() const {
-    return _is_capturing;
 }
 
 void V4L2Device::stream() {

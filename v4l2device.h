@@ -6,58 +6,73 @@
 #include <vector>
 #include <linux/videodev2.h>
 
-#define BUFFER_SIZE 10          /* default buffer size */
-#define DEV_NAME "/dev/video0"  /* default device name */
+#define DEV_NAME "/dev/video0"
 
-#define HEIGHT 640
-#define WIDTH 480
+#define BUFFER_SIZE 10
 
-/* Video buffer structure */
+#define HEIGHT 320
+#define WIDTH  240
+
+#define CLEAR(x) memset(&x, 0, sizeof(x))
+
+/* video buffer structure */
 typedef struct {
     void *start = nullptr;    // pointer to the buffer data
     size_t length = 0;        // data size
 } Buffer;
 
 
-/*  */
+/* v4l2 device parameters structure */
 typedef struct {
+
     std::string dev_name = DEV_NAME;
 
     /* resolution */
-    unsigned int width = WIDTH;
+    unsigned int width  = WIDTH;
     unsigned int height = HEIGHT;
 
     /* fps */
-    unsigned int numerator = 1001;
+    unsigned int numerator   = 1001;
     unsigned int denominator = 30000;
 
+    /* buffer */
     unsigned int n_buffers = BUFFER_SIZE;
 
     /* format */
     unsigned int pixel_format = V4L2_PIX_FMT_MJPEG;
-    unsigned int pix_field = V4L2_FIELD_ANY;
-
-    bool force_format = false;
+    unsigned int pix_field    = V4L2_FIELD_ANY;
 
 } v4l2_device_param;
+
 
 /* This class represents v4l2 device */
 class V4L2Device {
 public:
 
-    V4L2Device(const v4l2_device_param& = v4l2_device_param());
+    V4L2Device();
+
+    V4L2Device(const v4l2_device_param&);
 
     ~V4L2Device();
+
+    /* Prohibit copy constructor and assignment operator */
+    V4L2Device(const V4L2Device&) = delete;
+
+    V4L2Device& operator=(const V4L2Device&) = delete;
+
+    // ==================================== //
 
     int getFileDescriptor() const;
 
     bool isCapturing() const;
 
+    void setIsCapturing(bool);
+
     // ============== Stream ============== //
 
-    void stop_capturing();
+    void stopCapturing();
 
-    void start_capturing();
+    void startCapturing();
 
 private:
 
@@ -70,10 +85,7 @@ private:
 
     std::vector<Buffer> _buffers;
 
-    /* Prohibit copy constructor and assignment operator */
-    V4L2Device(const V4L2Device&) = delete;
-
-    V4L2Device& operator=(const V4L2Device&) = delete;
+    bool _force_format;
 
     // ========= Initialization ========== //
 
@@ -84,8 +96,6 @@ private:
     void query_capability();
 
     void query_format();
-
-    void query_crop();
 
     void init_mmap();
 
