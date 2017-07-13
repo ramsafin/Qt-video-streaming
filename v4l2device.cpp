@@ -10,7 +10,7 @@
 
 #include "v4l2device.h"
 
-// ioctl fucntion v4l2 wrapper
+/* ioctl fucntion v4l2 wrapper */
 static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
     int status_code = 0;
 
@@ -24,7 +24,7 @@ static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
 
 // ========= V4L2Device class ========== //
 
-V4L2Device::V4L2Device(const v4l2_device_param &parameters) : _parameters(parameters) {
+V4L2Device::V4L2Device(const v4l2_device_param &parameters) : _parameters(parameters), _is_capturing(false) {
     open_device();
     init_device();
     start_capturing();
@@ -54,9 +54,9 @@ void V4L2Device::open_device() {
     }
 
     // see https://linux.die.net/man/2/fcntl about flags
-    fd = open(_parameters.dev_name.c_str(), O_RDWR | O_NONBLOCK);
+    _fd = open(_parameters.dev_name.c_str(), O_RDWR | O_NONBLOCK);
 
-    if (fd == -1) {
+    if (_fd == -1) {
         throw std::runtime_error(_parameters.dev_name + ": cannot open! " + std::to_string(errno) + ": " + strerror(errno));
     }
 
@@ -71,7 +71,7 @@ void V4L2Device::init_mmap() {
     req_buffers.memory = V4L2_MEMORY_MMAP;
 
     /* establish a set of buffers between the application and video driver */
-    if (v4l2_ioctl(fd, VIDIOC_REQBUFS, &req_buffers) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_REQBUFS, &req_buffers) == -1) {
         if (errno == EINVAL) {
             throw std::runtime_error(_parameters.dev_name + " doesn't support memory mapping");
         } else {
@@ -95,13 +95,13 @@ void V4L2Device::init_mmap() {
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = buffer_idx;
 
-        if (v4l2_ioctl(fd, VIDIOC_QUERYBUF, &buf)) {
+        if (v4l2_ioctl(_fd, VIDIOC_QUERYBUF, &buf)) {
             throw std::runtime_error("VIDIOC_QUERYBUF");
         }
 
         _buffers[buffer_idx].length = buf.length;
         _buffers[buffer_idx].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
-                                          MAP_SHARED, fd, buf.m.offset);
+                                          MAP_SHARED, _fd, buf.m.offset);
 
         if (MAP_FAILED == _buffers[buffer_idx].start) {
             throw std::runtime_error("MMAP");
@@ -113,7 +113,7 @@ void V4L2Device::query_capability() {
 
     struct v4l2_capability capability;
 
-    if (v4l2_ioctl(fd, VIDIOC_QUERYCAP, &capability) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_QUERYCAP, &capability) == -1) {
         if (errno == EINVAL) {
             throw std::runtime_error(_parameters.dev_name + " is no V4L2 device");
         } else {
@@ -136,11 +136,11 @@ void V4L2Device::query_capability() {
 }
 
 void V4L2Device::close_device() {
-    if (close(fd) == -1) {
+    if (close(_fd) == -1) {
         throw std::runtime_error(_parameters.dev_name + " cannot close! " + std::to_string(errno) + ": " + strerror(errno));
     }
 
-    fd = -1;
+    _fd = -1;
 }
 
 void V4L2Device::query_format() {
@@ -156,7 +156,7 @@ void V4L2Device::query_format() {
         format.fmt.pix.pixelformat  = _parameters.pixel_format; // see what device supports
         format.fmt.pix.field        = _parameters.pix_field;
 
-        if (v4l2_ioctl(fd, VIDIOC_S_FMT, &format) == -1) {
+        if (v4l2_ioctl(_fd, VIDIOC_S_FMT, &format) == -1) {
             throw std::runtime_error("VIDIOC_S_FMT");
         }
 
@@ -171,7 +171,7 @@ void V4L2Device::query_format() {
 
     } else {
         // preserve original setting
-        if (v4l2_ioctl(fd, VIDIOC_G_FMT, &format) == -1) {
+        if (v4l2_ioctl(_fd, VIDIOC_G_FMT, &format) == -1) {
             throw std::runtime_error("VIDIOC_G_FMT");
         }
     }
@@ -189,7 +189,7 @@ void V4L2Device::init_fps() {
     stream_param.parm.capture.timeperframe.numerator   = _parameters.numerator;
     stream_param.parm.capture.timeperframe.denominator = _parameters.denominator;
 
-    if (v4l2_ioctl(fd, VIDIOC_S_PARM, &stream_param) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_S_PARM, &stream_param) == -1) {
         std::cerr << "VIDIOC_S_PARM" << std::endl;
     }
 
@@ -205,6 +205,8 @@ void V4L2Device::init_device() {
 
     init_fps();
 
+    init_buffers();
+
     init_mmap();
 }
 
@@ -213,6 +215,15 @@ void V4L2Device::uninit_device() {
         if (munmap(_buffers[i].start, _buffers[i].length) == -1) {
             throw std::runtime_error(std::string(strerror(errno)) + ". MUNMAP");
         }
+    }
+}
+
+void V4L2Device::init_buffers() {
+
+    _buffers.reserve(_parameters.n_buffers);
+
+    for (unsigned int i = _parameters.n_buffers; i > 0; --i) {
+
     }
 }
 
@@ -229,7 +240,7 @@ void V4L2Device::start_capturing() {
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
 
-        if (v4l2_ioctl(fd, VIDIOC_QBUF, &buf) == -1) {
+        if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
             throw std::runtime_error("VIDIOC_QBUF");
         }
     }
@@ -237,9 +248,12 @@ void V4L2Device::start_capturing() {
     type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
     // start capture
-    if (v4l2_ioctl(fd, VIDIOC_STREAMON, &type) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_STREAMON, &type) == -1) {
         throw std::runtime_error("VIDIOC_STREAMON");
     }
+
+    // set the flag
+    _is_capturing = true;
 }
 
 void V4L2Device::stop_capturing() {
@@ -250,9 +264,12 @@ void V4L2Device::stop_capturing() {
 
     std::cout << "stop capturing" << std::endl;
 
-    if (v4l2_ioctl(fd, VIDIOC_STREAMOFF, &type) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_STREAMOFF, &type) == -1) {
         throw std::runtime_error("VIDIOC_STREAMOFF");
     }
+
+    // set the flag
+    _is_capturing = false;
 }
 
 bool V4L2Device::is_stream_readable() {
@@ -260,14 +277,15 @@ bool V4L2Device::is_stream_readable() {
     fd_set fds;
 
     FD_ZERO(&fds);
-    FD_SET(fd, &fds);
+    FD_SET(_fd, &fds);
 
     struct timeval tval = {0};
     tval.tv_sec = 1;
 
-    return select(fd + 1, &fds, NULL, NULL, &tval);
+    return select(_fd + 1, &fds, NULL, NULL, &tval);
 }
 
+// TODO return frame in some way (structure, or something else)
 bool V4L2Device::read_frame() {
 
     struct v4l2_buffer buf = {0};
@@ -276,7 +294,7 @@ bool V4L2Device::read_frame() {
     buf.memory = V4L2_MEMORY_MMAP;
 
     // get frame from driver's outgoing queue
-    if (v4l2_ioctl(fd, VIDIOC_DQBUF, &buf) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_DQBUF, &buf) == -1) {
         switch (errno) {
             case EAGAIN:
                 return false;
@@ -295,38 +313,40 @@ bool V4L2Device::read_frame() {
     // TODO process image
     // process_frame(buffers[buf.index].start, buf.bytesused);
 
-    if (v4l2_ioctl(fd, VIDIOC_QBUF, &buf) == -1) {
+
+
+    if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
         throw std::runtime_error("VIDIOC_QBUF");
     }
 
     return true;
 }
 
+bool V4L2Device::isCapturing() const {
+    return _is_capturing;
+}
+
 void V4L2Device::stream() {
 
-    if (fd != -1) {
+    if (_fd != -1) {
 
         std::cout << "start capturing" << std::endl;
 
-        unsigned int count = 32; // frames
+        while (_is_capturing) {
 
-        while (count-- > 0) {
-            while (true) {
+            int r = is_stream_readable();
 
-                int r = is_stream_readable();
+            if (r == -1) {
+                if (errno == EINTR) continue;
+                throw std::runtime_error("Waiting for frame exception");
+            }
 
-                if (r == -1) {
-                    if (errno == EINTR) continue;
-                    throw std::runtime_error("Waiting for frame exception");
-                }
+            if (r == 0) {
+                throw std::runtime_error("Select timeout exception");
+            }
 
-                if (r == 0) {
-                    throw std::runtime_error("Select timeout exception");
-                }
-
-                if (read_frame()) {
-                    break;
-                }
+            if (read_frame()) {
+                break;
             }
         }
     }
