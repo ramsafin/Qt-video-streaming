@@ -30,9 +30,11 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
         main.cpp \
-    v4l2device.cpp
+    v4l2device.cpp \
+    capturethread.cpp
 
 HEADERS += \
-    v4l2device.h
+    v4l2device.h \
+    capturethread.h
 
 FORMS +=

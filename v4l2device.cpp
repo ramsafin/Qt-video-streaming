@@ -25,20 +25,17 @@ static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
 // ========= V4L2Device class ========== //
 
 V4L2Device::V4L2Device() :
-    _is_capturing(false), _parameters(v4l2_device_param()), _force_format(false)
-{
-    open_device();
-    init_device();
-}
+    V4L2Device(v4l2_device_param {}) {}
 
 V4L2Device::V4L2Device(const v4l2_device_param &parameters) :
-    _is_capturing(false), _parameters(parameters), _force_format(true)
+    _is_capturing(false), _parameters(parameters)
 {
     open_device();
     init_device();
 }
 
 V4L2Device::~V4L2Device() {
+    std::cout << "destructor" << std::endl;
     stopCapturing();
     uninit_device();
     close_device();
@@ -83,22 +80,16 @@ void V4L2Device::close_device() {
 // =============================================== //
 
 void V4L2Device::init_device() {
-
     query_capability();
-
     query_format();
-
     init_fps();
-
     init_buffers();
-
     init_mmap();
 }
 
-/* NOTE: vulnarable place - buffers if error */
 void V4L2Device::uninit_device() {
-    for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
-        if (munmap(_buffers[i].start, _buffers[i].length) == -1) {
+    for (auto &buf : _buffers) {
+        if (munmap(buf.start, buf.length) == -1) {
             throw std::runtime_error(std::string(strerror(errno)) + ". MUNMAP");
         }
     }
@@ -129,7 +120,7 @@ void V4L2Device::query_capability() {
     }
 
     // store current capabilties
-    this->_capability = capability;
+    _capability = capability;
 }
 
 void V4L2Device::query_format() {
@@ -138,42 +129,30 @@ void V4L2Device::query_format() {
 
     format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
-    if (_force_format) {
+    /* See what device supports with v4l2-ctl utility for example */
+    format.fmt.pix.width        = _parameters.width;
+    format.fmt.pix.height       = _parameters.height;
+    format.fmt.pix.field        = _parameters.pix_field;
+    format.fmt.pix.pixelformat  = _parameters.pixel_format;
 
-        /* See what device supports with v4l2-ctl utility */
-        format.fmt.pix.width        = _parameters.width;
-        format.fmt.pix.height       = _parameters.height;
-        format.fmt.pix.field        = _parameters.pix_field;
-        format.fmt.pix.pixelformat  = _parameters.pixel_format;
-
-        if (v4l2_ioctl(_fd, VIDIOC_S_FMT, &format) == -1) {
-            throw std::runtime_error("VIDIOC_S_FMT");
-        }
-
-        if (format.fmt.pix.pixelformat != _parameters.pixel_format) {
-            throw std::runtime_error(_parameters.dev_name + " does not support current format");
-        }
-
-        // TODO find out field format
-        // VIDIOC_S_FMT may change width and height
-        _parameters.width     = format.fmt.pix.width;
-        _parameters.height    = format.fmt.pix.height;
-        _parameters.pix_field = format.fmt.pix.field;
-
-    } else {
-        // preserve original setting
-        if (v4l2_ioctl(_fd, VIDIOC_G_FMT, &format) == -1) {
-            throw std::runtime_error("VIDIOC_G_FMT");
-        }
-
-        // save parameters
-        _parameters.width        = format.fmt.pix.width;
-        _parameters.height       = format.fmt.pix.height;
-        _parameters.pix_field    = format.fmt.pix.field;
-        _parameters.pixel_format = format.fmt.pix.pixelformat;
+    if (v4l2_ioctl(_fd, VIDIOC_S_FMT, &format) == -1) {
+        throw std::runtime_error("VIDIOC_S_FMT");
     }
 
-    printf("Size: %d x %d\n", format.fmt.pix.width, format.fmt.pix.height);
+    if (format.fmt.pix.pixelformat != _parameters.pixel_format) {
+        throw std::runtime_error(_parameters.dev_name + " does not support current format");
+    }
+
+    // TODO find out field format
+    // VIDIOC_S_FMT may change width and height
+    _parameters.width     = format.fmt.pix.width;
+    _parameters.height    = format.fmt.pix.height;
+    _parameters.pix_field = format.fmt.pix.field;
+
+    // save format
+    _format = format;
+
+    std::cout << "Size: " << format.fmt.pix.width << " x " << format.fmt.pix.height << std::endl;
 }
 
 void V4L2Device::init_fps() {
@@ -202,8 +181,8 @@ void V4L2Device::init_buffers() {
 
     _buffers.reserve(_parameters.n_buffers);
 
-    for (unsigned int i = _parameters.n_buffers; i > 0; --i) {
-        _buffers.push_back(Buffer());
+    for (unsigned int i = 0; i < _parameters.n_buffers; ++i) {
+        _buffers.push_back(Buffer{});
     }
 }
 
@@ -247,7 +226,7 @@ void V4L2Device::init_mmap() {
         _buffers[buffer_idx].length = buf.length;
 
         /* vulnarable place, use smart pointer -> less effective */
-        _buffers[buffer_idx].start = mmap(NULL, buf.length, PROT_READ | PROT_WRITE,
+        _buffers[buffer_idx].start = mmap(nullptr, buf.length, PROT_READ | PROT_WRITE,
                                           MAP_SHARED, _fd, buf.m.offset);
 
         /* couldn't map memory. See mmap spec */
@@ -379,7 +358,7 @@ void V4L2Device::stream() {
 
     if (_fd != -1) {
 
-        std::cout << "start capturing" << std::endl;
+        std::cout << "start streaming" << std::endl;
 
         while (_is_capturing) {
 

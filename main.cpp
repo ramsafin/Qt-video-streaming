@@ -1,31 +1,21 @@
 #include "v4l2device.h"
 #include <thread>
 #include <chrono>
+#include <QApplication>
+#include <QWidget>
+#include "capturethread.h"
 
 int main(int argc, char *argv[])
 {
+    v4l2_device_param p = {};
 
-    v4l2_device_param p;
+    CaptureThread thread(p);
 
-    p.height = 720;
-    p.width = 1280;
-    p.n_buffers = 15;
+    QApplication app(argc, argv);
 
-    V4L2Device device(p);
+    QWidget *widget = new QWidget;
 
-    device.startCapturing();
+    widget->show();
 
-    std::this_thread::sleep_for(std::chrono::seconds(4));
-
-    device.stopCapturing();
-
-    std::this_thread::sleep_for(std::chrono::seconds(4));
-
-    device.startCapturing();
-
-    std::this_thread::sleep_for(std::chrono::seconds(4));
-
-    std::cout << "end" << std::endl;
-
-    return 0;
+    return app.exec();
 }

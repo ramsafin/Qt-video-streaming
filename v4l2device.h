@@ -15,8 +15,8 @@
 
 /* video buffer structure */
 typedef struct {
-    void *start = nullptr;    // pointer to the buffer data
-    size_t length = 0;        // data size
+    void *start;
+    size_t length;
 } Buffer;
 
 
@@ -72,6 +72,8 @@ public:
 
     void startCapturing();
 
+    void stream();
+
 private:
 
     int _fd;
@@ -82,8 +84,6 @@ private:
     v4l2_format       _format;
 
     std::vector<Buffer> _buffers;
-
-    bool _force_format;
 
     // ========= Initialization ========== //
 
@@ -106,10 +106,6 @@ private:
     void uninit_device();
 
     void close_device();
-
-    // ============== Stream ============== //
-
-    void stream();
 
     // ============= State ================ //
 
