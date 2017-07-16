@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <functional>
 #include <linux/videodev2.h>
 
 #define DEV_NAME "/dev/video0"
@@ -47,9 +48,7 @@ typedef struct {
 class V4L2Device {
 public:
 
-    V4L2Device();
-
-    V4L2Device(const v4l2_device_param&);
+    V4L2Device(const v4l2_device_param& = {});
 
     ~V4L2Device();
 
@@ -78,6 +77,7 @@ private:
 
     int _fd;
     bool _is_capturing;
+    std::function<void()> _callback;
 
     v4l2_device_param _parameters;
     v4l2_capability   _capability;

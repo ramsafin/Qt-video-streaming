@@ -8,6 +8,9 @@
 #include <cstring>
 #include <iostream>
 
+#include <thread>
+#include <chrono>
+
 #include "v4l2device.h"
 
 /* ioctl fucntion v4l2 wrapper */
@@ -23,9 +26,6 @@ static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
 }
 
 // ========= V4L2Device class ========== //
-
-V4L2Device::V4L2Device() :
-    V4L2Device(v4l2_device_param {}) {}
 
 V4L2Device::V4L2Device(const v4l2_device_param &parameters) :
     _is_capturing(false), _parameters(parameters)
@@ -70,6 +70,9 @@ void V4L2Device::open_device() {
 }
 
 void V4L2Device::close_device() {
+
+    std::cout << "close device" << std::endl;
+
     if (close(_fd) == -1) {
         throw std::runtime_error(_parameters.dev_name + " cannot close! " + std::to_string(errno) + ": " + strerror(errno));
     }
@@ -80,6 +83,9 @@ void V4L2Device::close_device() {
 // =============================================== //
 
 void V4L2Device::init_device() {
+
+    std::cout << "init device" << std::endl;
+
     query_capability();
     query_format();
     init_fps();
@@ -88,6 +94,9 @@ void V4L2Device::init_device() {
 }
 
 void V4L2Device::uninit_device() {
+
+    std::cout << "uninit device" << std::endl;
+
     for (auto &buf : _buffers) {
         if (munmap(buf.start, buf.length) == -1) {
             throw std::runtime_error(std::string(strerror(errno)) + ". MUNMAP");
@@ -315,11 +324,13 @@ bool V4L2Device::is_stream_readable() {
     struct timeval tval = {0};
     tval.tv_sec = 2;
 
-    return select(_fd + 1, &fds, NULL, NULL, &tval);
+    return select(_fd + 1, &fds, nullptr, nullptr, &tval);
 }
 
 // TODO return frame in some way (structure, or something else)
 bool V4L2Device::read_frame() {
+
+    if (!_is_capturing) return true;
 
     struct v4l2_buffer buf = {0};
 
@@ -336,7 +347,8 @@ bool V4L2Device::read_frame() {
                 /* Could ignore EIO see spec */
                 /* fall through */
             default:
-                throw std::runtime_error("VIDIOC_DQBUF");
+                std::cerr << "EIO: " <<  strerror(errno) << std::endl;
+                throw std::runtime_error("VIDIOC_DQBUF_1");
         }
     }
 
@@ -347,6 +359,7 @@ bool V4L2Device::read_frame() {
 
     // TODO process image
 
+
     if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
         throw std::runtime_error("VIDIOC_QBUF");
     }
@@ -356,9 +369,7 @@ bool V4L2Device::read_frame() {
 
 void V4L2Device::stream() {
 
-    if (_fd != -1) {
-
-        std::cout << "start streaming" << std::endl;
+    while (true) {
 
         while (_is_capturing) {
 
@@ -377,5 +388,8 @@ void V4L2Device::stream() {
                 break;
             }
         }
+
     }
+
+
 }

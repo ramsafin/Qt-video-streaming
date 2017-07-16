@@ -31,10 +31,13 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         main.cpp \
     v4l2device.cpp \
-    capturethread.cpp
+    capturethread.cpp \
+    videostreamer.cpp
 
 HEADERS += \
     v4l2device.h \
-    capturethread.h
+    capturethread.h \
+    videostreamer.h
 
-FORMS +=
+FORMS += \
+    videostreamer.ui
