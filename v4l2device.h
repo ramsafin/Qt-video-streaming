@@ -77,7 +77,7 @@ private:
 
     int _fd;
     bool _is_capturing;
-    std::function<void()> _callback;
+    std::function<void()> _callback; // TODO read frame callback
 
     v4l2_device_param _parameters;
     v4l2_capability   _capability;

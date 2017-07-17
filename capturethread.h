@@ -24,7 +24,7 @@ public:
 
 private:
     std::unique_ptr<V4L2Device> _device;
-//    std::mutex _mutex;
+    std::mutex _mutex;
 };
 
 #endif // CAPTURETHREAD_H

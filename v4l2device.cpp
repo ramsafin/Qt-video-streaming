@@ -8,9 +8,6 @@
 #include <cstring>
 #include <iostream>
 
-#include <thread>
-#include <chrono>
-
 #include "v4l2device.h"
 
 /* ioctl fucntion v4l2 wrapper */
@@ -329,8 +326,6 @@ bool V4L2Device::is_stream_readable() {
 
 // TODO return frame in some way (structure, or something else)
 bool V4L2Device::read_frame() {
-
-    if (!_is_capturing) return true;
 
     struct v4l2_buffer buf = {0};
 

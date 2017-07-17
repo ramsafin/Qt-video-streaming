@@ -4,6 +4,7 @@ CaptureThread::CaptureThread(const v4l2_device_param &parameters) :
     _device(new V4L2Device(parameters))
 {
     std::thread([&]() {
+        // TODO lock mutex
         _device->stream();
     }).detach();
 }
@@ -17,8 +18,6 @@ void CaptureThread::stop() {
 }
 
 void CaptureThread::changeState() {
-
-//    std::unique_lock<std::mutex> lock(_mutex);
 
     if (isCapturing()) {
         stop();
