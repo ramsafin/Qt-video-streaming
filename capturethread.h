@@ -4,6 +4,8 @@
 #include "v4l2device.h"
 #include <thread>
 #include <mutex>
+#include <functional>
+#include <memory>
 
 class CaptureThread {
 public:
@@ -14,13 +16,26 @@ public:
 
     CaptureThread& operator=(const CaptureThread&) = delete;
 
+    // ================================= //
+
     void start();
 
     void stop();
 
+    void changeState();
+
+    // ================================== //
+
+    void run();
+
+    bool readFrame();
+
     bool isCapturing();
 
-    void changeState();
+    // =================================== //
+
+    void setCallback(const std::function<void(const Buffer&, const struct v4l2_buffer&)> &);
+
 
 private:
     std::unique_ptr<V4L2Device> _device;

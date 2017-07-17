@@ -7,6 +7,7 @@
 #include <linux/videodev2.h>
 #include <cstring>
 #include <iostream>
+#include <functional>
 
 #include "v4l2device.h"
 
@@ -27,6 +28,7 @@ static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
 V4L2Device::V4L2Device(const v4l2_device_param &parameters) :
     _is_capturing(false), _parameters(parameters)
 {
+    setCallback([](const Buffer&, const struct v4l2_buffer&) {});
     open_device();
     init_device();
 }
@@ -309,9 +311,13 @@ int V4L2Device::getFileDescriptor() const {
     return _fd;
 }
 
+void V4L2Device::setCallback(const std::function<void (const Buffer &, const struct v4l2_buffer &)> &callback) {
+    _callback = callback;
+}
+
 // =============================================== //
 
-bool V4L2Device::is_stream_readable() {
+bool V4L2Device::isStreamReadable() {
 
     fd_set fds;
 
@@ -324,8 +330,7 @@ bool V4L2Device::is_stream_readable() {
     return select(_fd + 1, &fds, nullptr, nullptr, &tval);
 }
 
-// TODO return frame in some way (structure, or something else)
-bool V4L2Device::read_frame() {
+bool V4L2Device::readFrame() {
 
     struct v4l2_buffer buf = {0};
 
@@ -343,7 +348,7 @@ bool V4L2Device::read_frame() {
                 /* fall through */
             default:
                 std::cerr << "EIO: " <<  strerror(errno) << std::endl;
-                throw std::runtime_error("VIDIOC_DQBUF_1");
+                throw std::runtime_error("VIDIOC_DQBUF read frame");
         }
     }
 
@@ -352,8 +357,9 @@ bool V4L2Device::read_frame() {
      * for buffer structure information
      */
 
-    // TODO process image
-
+    // callback
+    // TODO other thread, async issue
+    _callback(_buffers[buf.index], buf);
 
     if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
         throw std::runtime_error("VIDIOC_QBUF");
@@ -368,7 +374,7 @@ void V4L2Device::stream() {
 
         while (_is_capturing) {
 
-            int r = is_stream_readable();
+            int r = isStreamReadable();
 
             if (r == -1) {
                 if (errno == EINTR) continue;
@@ -379,12 +385,11 @@ void V4L2Device::stream() {
                 throw std::runtime_error("Select timeout exception");
             }
 
-            if (read_frame()) {
+            if (readFrame()) {
                 break;
             }
         }
 
     }
-
 
 }

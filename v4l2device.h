@@ -11,8 +11,8 @@
 
 #define BUFFER_SIZE 10
 
-#define HEIGHT 320
-#define WIDTH  240
+#define HEIGHT 720
+#define WIDTH  1280
 
 /* video buffer structure */
 typedef struct {
@@ -65,6 +65,8 @@ public:
 
     void setIsCapturing(bool);
 
+    void setCallback(const std::function<void(const Buffer&, const struct v4l2_buffer&)> &);
+
     // ============== Stream ============== //
 
     void stopCapturing();
@@ -73,11 +75,19 @@ public:
 
     void stream();
 
+    // ============= State ================ //
+
+    bool isStreamReadable();
+
+    // =========== Stream data  ============ //
+
+    bool readFrame();
+
 private:
 
     int _fd;
     bool _is_capturing;
-    std::function<void()> _callback; // TODO read frame callback
+    std::function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
 
     v4l2_device_param _parameters;
     v4l2_capability   _capability;
@@ -106,14 +116,6 @@ private:
     void uninit_device();
 
     void close_device();
-
-    // ============= State ================ //
-
-    bool is_stream_readable();
-
-    // =========== Stream data  ============ //
-
-    bool read_frame();
 };
 
 #endif // V4L2DEVICE_H
