@@ -347,7 +347,6 @@ bool V4L2Device::readFrame() {
                 /* Could ignore EIO see spec */
                 /* fall through */
             default:
-                std::cerr << "EIO: " <<  strerror(errno) << std::endl;
                 throw std::runtime_error("VIDIOC_DQBUF read frame");
         }
     }

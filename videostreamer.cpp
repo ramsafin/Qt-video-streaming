@@ -36,7 +36,6 @@ void VideoStreamer::paintEvent(QPaintEvent *event) {
 }
 
 void VideoStreamer::setPicture(const QImage& image) {
-    //    std::cout << "set picture slot" << std::endl;
 
     pixmap = QPixmap::fromImage(image);
     update();
