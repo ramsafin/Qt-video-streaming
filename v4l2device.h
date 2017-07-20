@@ -4,6 +4,8 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <thread>
+#include <mutex>
 #include <functional>
 #include <linux/videodev2.h>
 
@@ -14,14 +16,18 @@
 #define HEIGHT 720
 #define WIDTH  1280
 
-/* video buffer structure */
+/**
+ *
+ */
 typedef struct {
     void *start;
     size_t length;
 } Buffer;
 
 
-/* v4l2 device parameters structure */
+/**
+ * v4l2 device's parameters structure
+ */
 typedef struct {
 
     std::string dev_name = DEV_NAME;
@@ -44,17 +50,21 @@ typedef struct {
 } v4l2_device_param;
 
 
-/* This class represents v4l2 device */
+/**
+ * Represents v4l2 device, i.e. /dev/video0
+ */
 class V4L2Device {
+
 public:
 
+    /* constructor with device's preferred parameters */
     V4L2Device(const v4l2_device_param& = {});
 
+    /* destructor */
     ~V4L2Device();
 
     /* Prohibit copy constructor and assignment operator */
-    V4L2Device(const V4L2Device&) = delete;
-
+    V4L2Device(const V4L2Device&)            = delete;
     V4L2Device& operator=(const V4L2Device&) = delete;
 
     // ==================================== //
@@ -85,15 +95,22 @@ public:
 
 private:
 
+    /* device's file descriptor */
     int _fd;
-    bool _is_capturing;
-    std::function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
 
+    /* capturing state flag */
+    bool _is_capturing;
+
+    /* internal device parameters, capabilities, etc. */
     v4l2_device_param _parameters;
     v4l2_capability   _capability;
     v4l2_format       _format;
 
+    /* frames' buffers */
     std::vector<Buffer> _buffers;
+
+    /* callback function, it's invoked when frame's read */
+    std::function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
 
     // ========= Initialization ========== //
 
@@ -105,11 +122,11 @@ private:
 
     void query_format();
 
+    void init_buffers();
+
     void init_mmap();
 
     void init_fps();
-
-    void init_buffers();
 
     // =========== Destruction ============ //
 
