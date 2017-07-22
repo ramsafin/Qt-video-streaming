@@ -3,12 +3,12 @@
 
 int main(int argc, char *argv[])
 {
+
     QApplication app(argc, argv);
 
-    VideoStreamer v;
+    VideoStreamer streamer;
 
-    v.show();
+    streamer.show();
 
     return app.exec();
-
 }

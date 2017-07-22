@@ -8,15 +8,19 @@
 VideoStreamer::VideoStreamer(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::VideoStreamer),
-    _capture(new CaptureThread)
+    _capture(new V4L2Device{})
 {
     ui->setupUi(this);
 
+    string format = "yuv";
+
+    cout << "format: " << format << endl;
+
     _capture->setCallback([&](const Buffer& buffer, const struct v4l2_buffer& buf){
 
-        QByteArray data((const char*) buffer.start, buf.bytesused);
+        QByteArray data((const char*) buffer.data, buf.bytesused);
 
-        QImage img = QImage::fromData(data, "mjpeg");
+        QImage img = QImage::fromData(data, format.c_str());
 
         emit renderedImage(img);
     });

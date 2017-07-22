@@ -4,6 +4,9 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <atomic>
 #include <functional>
 #include <linux/videodev2.h>
 
@@ -11,20 +14,28 @@
 
 #define BUFFER_SIZE 10
 
-#define HEIGHT 720
 #define WIDTH  1280
+#define HEIGHT 720
 
-/* video buffer structure */
+using namespace std;
+
+/**
+ * Frames buffer structure
+ * @param data  - pointer to the raw frame data
+ * @param size  - data size (in bytes)
+ */
 typedef struct {
-    void *start;
-    size_t length;
+    void *data;
+    size_t size;
 } Buffer;
 
 
-/* v4l2 device parameters structure */
+/**
+ * v4l2 device's parameters structure
+ */
 typedef struct {
 
-    std::string dev_name = DEV_NAME;
+    string dev_name = DEV_NAME;
 
     /* resolution */
     unsigned int width  = WIDTH;
@@ -38,34 +49,34 @@ typedef struct {
     unsigned int n_buffers = BUFFER_SIZE;
 
     /* format */
-    unsigned int pixel_format = V4L2_PIX_FMT_MJPEG;
-    unsigned int pix_field    = V4L2_FIELD_ANY;
+    unsigned int pixel_format = V4L2_PIX_FMT_YUYV;
+    unsigned int pix_field    = V4L2_FIELD_NONE;
 
 } v4l2_device_param;
 
 
-/* This class represents v4l2 device */
+/**
+ * Represents v4l2 device, i.e. /dev/video0
+ */
 class V4L2Device {
+
 public:
 
+    /* constructor with device's preferred parameters */
     V4L2Device(const v4l2_device_param& = {});
 
+    /* destructor */
     ~V4L2Device();
 
     /* Prohibit copy constructor and assignment operator */
-    V4L2Device(const V4L2Device&) = delete;
-
+    V4L2Device(const V4L2Device&)            = delete;
     V4L2Device& operator=(const V4L2Device&) = delete;
 
-    // ==================================== //
+    // =================================== //
 
-    int getFileDescriptor() const;
+    int getHandle() const;
 
-    bool isCapturing() const;
-
-    void setIsCapturing(bool);
-
-    void setCallback(const std::function<void(const Buffer&, const struct v4l2_buffer&)> &);
+    void setCallback(const function<void(const Buffer&, const struct v4l2_buffer&)> &);
 
     // ============== Stream ============== //
 
@@ -73,27 +84,38 @@ public:
 
     void startCapturing();
 
-    void stream();
-
     // ============= State ================ //
 
-    bool isStreamReadable();
+    bool isCapturing() const;
 
-    // =========== Stream data  ============ //
+    void changeState();
 
-    bool readFrame();
+    // ============== Uitls =============== //
+
+    void printInfo();
 
 private:
 
+    /* device's file descriptor */
     int _fd;
-    bool _is_capturing;
-    std::function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
 
+    /* capturing state flag, thread safe */
+    atomic<bool> _is_capturing;
+
+    /* internal device parameters, capabilities, etc. */
     v4l2_device_param _parameters;
     v4l2_capability   _capability;
     v4l2_format       _format;
+    v4l2_streamparm   _stream_parameters;
 
-    std::vector<Buffer> _buffers;
+    /* frames' buffers */
+    vector<Buffer> _buffers;
+
+    /* callback function, it's invoked when frame's read */
+    function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
+
+    /* multithreading */
+    mutex _stream_mutex;
 
     // ========= Initialization ========== //
 
@@ -105,17 +127,25 @@ private:
 
     void query_format();
 
+    void init_buffers();
+
     void init_mmap();
 
     void init_fps();
-
-    void init_buffers();
 
     // =========== Destruction ============ //
 
     void uninit_device();
 
     void close_device();
+
+    // ============= Stream =============== //
+
+    int is_stream_readable();
+
+    bool read_frame();
+
+    void stream();
 };
 
 #endif // V4L2DEVICE_H
