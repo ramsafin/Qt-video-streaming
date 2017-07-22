@@ -1,10 +1,12 @@
 #ifndef VIDEOSTREAMER_H
 #define VIDEOSTREAMER_H
 
+#include <memory>
 #include <QMainWindow>
 #include <QPixmap>
-#include "capturethread.h"
+#include "v4l2device.h"
 
+using namespace std;
 
 namespace Ui {
     class VideoStreamer;
@@ -18,20 +20,20 @@ public:
     explicit VideoStreamer(QWidget *parent = 0);
     ~VideoStreamer();
 
-    QPixmap pixmap; // ***
+    QPixmap pixmap;
 
 signals:
-    void renderedImage(const QImage&); // ***
+    void renderedImage(const QImage&);
 
 private slots:
     void on_streamButton_clicked();
-    void setPicture(const QImage&); // ***
+    void setPicture(const QImage&);
 
 private:
     Ui::VideoStreamer *ui;
-    std::unique_ptr<CaptureThread> _capture;
+    unique_ptr<V4L2Device> _capture;
 
-    void paintEvent(QPaintEvent *event); // ***
+    void paintEvent(QPaintEvent *event);
 };
 
 #endif // VIDEOSTREAMER_H

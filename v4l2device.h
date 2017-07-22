@@ -49,7 +49,7 @@ typedef struct {
     unsigned int n_buffers = BUFFER_SIZE;
 
     /* format */
-    unsigned int pixel_format = V4L2_PIX_FMT_MJPEG;
+    unsigned int pixel_format = V4L2_PIX_FMT_YUYV;
     unsigned int pix_field    = V4L2_FIELD_NONE;
 
 } v4l2_device_param;
@@ -106,6 +106,7 @@ private:
     v4l2_device_param _parameters;
     v4l2_capability   _capability;
     v4l2_format       _format;
+    v4l2_streamparm   _stream_parameters;
 
     /* frames' buffers */
     vector<Buffer> _buffers;

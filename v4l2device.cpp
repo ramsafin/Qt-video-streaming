@@ -29,9 +29,6 @@ static int v4l2_ioctl(int fd, unsigned long int request, void *arg) {
 V4L2Device::V4L2Device(const v4l2_device_param &parameters) :
     _is_capturing(false), _parameters(parameters)
 {
-
-    cout << "v4l2 device [" << _parameters.dev_name << "] constructor" << endl;
-
     open_device();
     init_device();
 
@@ -39,12 +36,11 @@ V4L2Device::V4L2Device(const v4l2_device_param &parameters) :
     thread([&](){
         stream();
     }).detach();
+
+    printInfo();
 }
 
 V4L2Device::~V4L2Device() {
-
-    cout << "v4l2 device [" << _parameters.dev_name << "] destructor" << endl;
-
     stopCapturing();
     uninit_device();
     close_device();
@@ -54,14 +50,11 @@ V4L2Device::~V4L2Device() {
 
 void V4L2Device::open_device() {
 
-    cout << "open v4l2 device [" << _parameters.dev_name << "]" << endl;
-
-    // see http://pubs.opengroup.org/onlinepubs/7908799/xsh/sysstat.h.html
-    struct stat st;
+    struct stat st; // see http://pubs.opengroup.org/onlinepubs/7908799/xsh/sysstat.h.html
 
     if (stat(_parameters.dev_name.c_str(), &st) == -1) {
         throw runtime_error(_parameters.dev_name + ": cannot identify! " +
-                                 to_string(errno) + ": " + strerror(errno));
+                            to_string(errno) + ": " + strerror(errno));
     }
 
     if (!S_ISCHR(st.st_mode)) {
@@ -79,16 +72,13 @@ void V4L2Device::open_device() {
     if (_fd == -1) {
         throw runtime_error(_parameters.dev_name + ": cannot open! " + to_string(errno) + ": " + strerror(errno));
     }
-
-    cout << "v4l2 device's [" << _parameters.dev_name << "] handle: " << _fd << endl;
 }
 
 void V4L2Device::close_device() {
 
-    cout << "close v4l2 device [" << _parameters.dev_name << "]" << endl;
-
     if (close(_fd) == -1) {
-        throw runtime_error(_parameters.dev_name + " cannot close! " + to_string(errno) + ": " + strerror(errno));
+        throw runtime_error(_parameters.dev_name + " cannot close! " +
+                            to_string(errno) + ": " + strerror(errno));
     }
 
     _fd = -1;
@@ -97,9 +87,6 @@ void V4L2Device::close_device() {
 // =============================================== //
 
 void V4L2Device::init_device() {
-
-    cout << "init v4l2 device [" << _parameters.dev_name << "]" << endl;
-
     query_capability();
     query_format();
     init_fps();
@@ -108,9 +95,6 @@ void V4L2Device::init_device() {
 }
 
 void V4L2Device::uninit_device() {
-
-    cout << "uninit v4l2 device [" << _parameters.dev_name << "]" << endl;
-
     // unmap buffers
     for (auto &buf : _buffers) {
         if (munmap(buf.data, buf.size) == -1) {
@@ -171,9 +155,6 @@ void V4L2Device::query_format() {
 
     // save received format
     _format = format;
-
-    cout << "[" << _parameters.dev_name << "]" << " -> Size: "
-              << format.fmt.pix.width << " x " << format.fmt.pix.height << endl;
 }
 
 void V4L2Device::init_fps() {
@@ -192,12 +173,8 @@ void V4L2Device::init_fps() {
         cerr << "VIDIOC_S_PARM" << endl;
     }
 
-    // save parameters, VIDIOC_S_PARM may change fps
-    _parameters.numerator   = stream_param.parm.capture.timeperframe.numerator;
-    _parameters.denominator = stream_param.parm.capture.timeperframe.denominator;
-
-    cout << "FPS: " << stream_param.parm.capture.timeperframe.numerator << "/"
-              << stream_param.parm.capture.timeperframe.denominator << endl;
+    // save stream parameters
+    _stream_parameters = stream_param;
 }
 
 void V4L2Device::init_buffers() {
@@ -230,8 +207,6 @@ void V4L2Device::init_mmap() {
     if (req_buffers.count != _parameters.n_buffers) {
         throw runtime_error("Invalid requested buffers number");
     }
-
-    cout << "Buffers number: " << _parameters.n_buffers << endl;
 
     /* put application buffers into driver's incoming queue in order to get raw data */
     for (unsigned int buffer_idx = 0; buffer_idx < req_buffers.count; ++buffer_idx) {
@@ -290,8 +265,6 @@ void V4L2Device::startCapturing() {
             throw runtime_error("VIDIOC_STREAMON");
         }
 
-        cout << "[" << _parameters.dev_name << "] -> start capturing" << endl;
-
         // set the flag
         _is_capturing = true;
     }
@@ -309,8 +282,6 @@ void V4L2Device::stopCapturing() {
         if (v4l2_ioctl(_fd, VIDIOC_STREAMOFF, &type) == -1) {
             throw runtime_error("VIDIOC_STREAMOFF");
         }
-
-        cout << "[" << _parameters.dev_name << "] -> stop capturing" << endl;
 
         // set the flag
         _is_capturing = false;
@@ -357,7 +328,6 @@ int V4L2Device::is_stream_readable() {
 }
 
 bool V4L2Device::read_frame() {
-    using namespace std;
 
     lock_guard<mutex> lock(_stream_mutex);
 
@@ -375,7 +345,7 @@ bool V4L2Device::read_frame() {
             case EAGAIN:
                 return false;
             case EIO:
-                cerr << "EIO: " <<  strerror(errno) << endl;
+                cerr << "I/O ERROR: " <<  strerror(errno) << endl;
                 /* Could ignore EIO, see spec */
                 /* fall through */
             default:
@@ -386,6 +356,7 @@ bool V4L2Device::read_frame() {
     if (_callback) { // callback
         _callback(_buffers[buf.index], buf);
     }
+
 
     if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
         throw runtime_error("VIDIOC_QBUF");
@@ -411,11 +382,13 @@ void V4L2Device::stream() {
                 throw runtime_error("Select timeout exception");
             }
 
-            read_frame(); // read frame from the driver's queue (dequeue)
+            read_frame(); // read frame (dequeue and queue)
         }
         else
         {
-            /* WTF? */
+            /*
+             * NOTE: This is used for the purpose of less CPU consuming
+             */
             this_thread::sleep_for(chrono::milliseconds(10));
         }
 
@@ -427,7 +400,7 @@ void V4L2Device::stream() {
 
 void V4L2Device::printInfo() {
 
-    printf("=================\n");
+    cout << "=================================" << endl;
 
     printf( "Driver Caps:\n"
             "  Driver: \"%s\"\n"
@@ -442,7 +415,7 @@ void V4L2Device::printInfo() {
             (_capability.version >> 24) && 0xff,
             _capability.capabilities);
 
-    printf("=================\n");
+    cout << "=================================" << endl;
 
     struct v4l2_fmtdesc fmtdesc = {0};
     fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -457,11 +430,11 @@ void V4L2Device::printInfo() {
         strncpy(fourcc, (char*)&fmtdesc.pixelformat, 4);
         c = fmtdesc.flags & 1? 'C' : ' ';
         e = fmtdesc.flags & 2? 'E' : ' ';
-        printf(" %s: %c%c %s\n", fourcc, c, e, fmtdesc.description);
+        printf("\t%s: %c%c %s\n", fourcc, c, e, fmtdesc.description);
         fmtdesc.index++;
     }
 
-    printf("=================\n");
+    cout << "=================================" << endl;
 
     strncpy(fourcc, (char *)&_format.fmt.pix.pixelformat, 4);
 
@@ -475,4 +448,12 @@ void V4L2Device::printInfo() {
             fourcc,
             _format.fmt.pix.field);
 
+    cout << "=================================" << endl;
+
+    printf("Camera's fps: %d/%d\n", _stream_parameters.parm.capture.timeperframe.denominator,
+           _stream_parameters.parm.capture.timeperframe.numerator);
+
+    cout << "=================================" << endl;
+
+    printf("Buffers number: %d\n", _parameters.n_buffers);
 }
