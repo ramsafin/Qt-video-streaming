@@ -1,14 +1,27 @@
-#include <QApplication>
-#include "videostreamer.h"
+#include "v4l2device.h"
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    V4L2Device dev;
 
-    VideoStreamer v;
+//    dev.startCapturing();
 
-    v.show();
+    dev.printInfo();
 
-    return app.exec();
+    std::string token{0};
 
+    while (true) {
+
+        std::cin >> token;
+
+        switch(std::atoi(token.c_str())) {
+            case 1:
+                dev.startCapturing();
+                break;
+            default:
+                dev.stopCapturing();
+        }
+    }
+
+    return 0;
 }

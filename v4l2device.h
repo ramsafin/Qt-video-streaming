@@ -6,6 +6,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <functional>
 #include <linux/videodev2.h>
 
@@ -13,15 +14,19 @@
 
 #define BUFFER_SIZE 10
 
-#define HEIGHT 720
 #define WIDTH  1280
+#define HEIGHT 720
+
+using namespace std;
 
 /**
- *
+ * Frames buffer structure
+ * @param data  - pointer to the raw frame data
+ * @param size  - data size (in bytes)
  */
 typedef struct {
-    void *start;
-    size_t length;
+    void *data;
+    size_t size;
 } Buffer;
 
 
@@ -30,7 +35,7 @@ typedef struct {
  */
 typedef struct {
 
-    std::string dev_name = DEV_NAME;
+    string dev_name = DEV_NAME;
 
     /* resolution */
     unsigned int width  = WIDTH;
@@ -45,7 +50,7 @@ typedef struct {
 
     /* format */
     unsigned int pixel_format = V4L2_PIX_FMT_MJPEG;
-    unsigned int pix_field    = V4L2_FIELD_ANY;
+    unsigned int pix_field    = V4L2_FIELD_NONE;
 
 } v4l2_device_param;
 
@@ -67,15 +72,11 @@ public:
     V4L2Device(const V4L2Device&)            = delete;
     V4L2Device& operator=(const V4L2Device&) = delete;
 
-    // ==================================== //
+    // =================================== //
 
-    int getFileDescriptor() const;
+    int getHandle() const;
 
-    bool isCapturing() const;
-
-    void setIsCapturing(bool);
-
-    void setCallback(const std::function<void(const Buffer&, const struct v4l2_buffer&)> &);
+    void setCallback(const function<void(const Buffer&, const struct v4l2_buffer&)> &);
 
     // ============== Stream ============== //
 
@@ -83,23 +84,23 @@ public:
 
     void startCapturing();
 
-    void stream();
-
     // ============= State ================ //
 
-    bool isStreamReadable();
+    bool isCapturing() const;
 
-    // =========== Stream data  ============ //
+    void changeState();
 
-    bool readFrame();
+    // ============== Uitls =============== //
+
+    void printInfo();
 
 private:
 
     /* device's file descriptor */
     int _fd;
 
-    /* capturing state flag */
-    bool _is_capturing;
+    /* capturing state flag, thread safe */
+    atomic<bool> _is_capturing;
 
     /* internal device parameters, capabilities, etc. */
     v4l2_device_param _parameters;
@@ -107,10 +108,13 @@ private:
     v4l2_format       _format;
 
     /* frames' buffers */
-    std::vector<Buffer> _buffers;
+    vector<Buffer> _buffers;
 
     /* callback function, it's invoked when frame's read */
-    std::function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
+    function<void(const Buffer&, const struct v4l2_buffer&)> _callback;
+
+    /* multithreading */
+    mutex _stream_mutex;
 
     // ========= Initialization ========== //
 
@@ -133,6 +137,14 @@ private:
     void uninit_device();
 
     void close_device();
+
+    // ============= Stream =============== //
+
+    int is_stream_readable();
+
+    bool read_frame();
+
+    void stream();
 };
 
 #endif // V4L2DEVICE_H
