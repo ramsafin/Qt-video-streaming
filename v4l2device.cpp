@@ -155,6 +155,8 @@ void V4L2Device::query_format() {
 
     // save received format
     _format = format;
+
+    cout << "bytes per line: " << _format.fmt.pix.bytesperline << endl;
 }
 
 void V4L2Device::init_fps() {
@@ -300,16 +302,6 @@ void V4L2Device::changeState() {
     }
 }
 
-int V4L2Device::getHandle() const {
-    return _fd;
-}
-
-void V4L2Device::setCallback(const function<void (const Buffer &, const struct v4l2_buffer &)> &callback) {
-    _callback = callback;
-}
-
-// =============================================== //
-
 int V4L2Device::is_stream_readable() {
 
     fd_set fds;
@@ -318,7 +310,7 @@ int V4L2Device::is_stream_readable() {
     FD_SET(_fd, &fds);
 
     struct timeval tval = {0};
-    tval.tv_sec = 1; // timeout in seconds
+    tval.tv_sec = 2; // timeout in seconds
 
     /*
      * check whether specified device with file descriptor is ready for
@@ -334,13 +326,13 @@ bool V4L2Device::read_frame() {
     // additional check of the streaming flag
     if (!_is_capturing) return false;
 
-    struct v4l2_buffer buf = {0};
+    struct v4l2_buffer buffer_info = {0};
 
-    buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
+    buffer_info.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buffer_info.memory = V4L2_MEMORY_MMAP;
 
     // get frame from driver's outgoing queue
-    if (v4l2_ioctl(_fd, VIDIOC_DQBUF, &buf) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_DQBUF, &buffer_info) == -1) {
         switch (errno) {
             case EAGAIN:
                 return false;
@@ -354,11 +346,11 @@ bool V4L2Device::read_frame() {
     }
 
     if (_callback) { // callback
-        _callback(_buffers[buf.index], buf);
+        _callback(_buffers[buffer_info.index], buffer_info);
     }
 
 
-    if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buf) == -1) {
+    if (v4l2_ioctl(_fd, VIDIOC_QBUF, &buffer_info) == -1) {
         throw runtime_error("VIDIOC_QBUF");
     }
 
@@ -398,9 +390,53 @@ void V4L2Device::stream() {
 
 // ======================================= //
 
+int V4L2Device::getHandle() const {
+    return _fd;
+}
+
+string V4L2Device::getDevice() const {
+    return _parameters.dev_name;
+}
+
+const v4l2_capability& V4L2Device::getCapability() const {
+    return _capability;
+}
+
+const v4l2_format& V4L2Device::getFormat() const {
+    return _format;
+}
+
+const v4l2_streamparm& V4L2Device::getStreamParameters() const {
+    return _stream_parameters;
+}
+
+unsigned int V4L2Device::getWidth() const {
+    return _format.fmt.pix.width;
+}
+
+unsigned int V4L2Device::getHeight() const {
+    return _format.fmt.pix.height;
+}
+
+unsigned int V4L2Device::getStride() const {
+    return _format.fmt.pix.bytesperline;
+}
+
+unsigned int V4L2Device::getImageSize() const {
+    return _format.fmt.pix.sizeimage;
+}
+
+unsigned int V4L2Device::getPixelField() const {
+    return _format.fmt.pix.field;
+}
+
+void V4L2Device::setCallback(const function<void (const Buffer&, const struct v4l2_buffer&)> &callback) {
+    _callback = callback;
+}
+
 void V4L2Device::printInfo() {
 
-    cout << "=================================" << endl;
+    cout << "===============" << _parameters.dev_name << "==================" << endl;
 
     printf( "Driver Caps:\n"
             "  Driver: \"%s\"\n"
