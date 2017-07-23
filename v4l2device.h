@@ -50,7 +50,7 @@ typedef struct {
 
     /* format */
     unsigned int pixel_format = V4L2_PIX_FMT_YUYV;
-    unsigned int pix_field    = V4L2_FIELD_NONE;
+    unsigned int pix_field    = V4L2_FIELD_INTERLACED;
 
 } v4l2_device_param;
 
@@ -75,6 +75,24 @@ public:
     // =================================== //
 
     int getHandle() const;
+
+    string getDevice() const;
+
+    const v4l2_capability& getCapability() const;
+
+    const v4l2_format& getFormat() const;
+
+    const v4l2_streamparm& getStreamParameters() const;
+
+    unsigned int getWidth() const;
+
+    unsigned int getHeight() const;
+
+    unsigned int getStride() const;
+
+    unsigned int getImageSize() const;
+
+    unsigned int getPixelField() const;
 
     void setCallback(const function<void(const Buffer&, const struct v4l2_buffer&)> &);
 

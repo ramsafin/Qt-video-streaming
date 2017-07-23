@@ -12,15 +12,46 @@ VideoStreamer::VideoStreamer(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    string format = "yuv";
+    _capture->setCallback([&](const Buffer& buffer, const struct v4l2_buffer& buffer_info) {
 
-    cout << "format: " << format << endl;
+        cout << "start callback" << endl;
 
-    _capture->setCallback([&](const Buffer& buffer, const struct v4l2_buffer& buf){
+        QImage img = QImage(WIDTH, HEIGHT, QImage::Format_RGB888);
 
-        QByteArray data((const char*) buffer.data, buf.bytesused);
+        unsigned char *rgb_data = img.bits();
 
-        QImage img = QImage::fromData(data, format.c_str());
+        v4lconvert_yuyv_to_rgb24((const unsigned char*) buffer.data, rgb_data, WIDTH, HEIGHT,
+                                 2560);
+
+        emit renderedImage(img);
+    });
+
+    // connect rendered image signal to set picture slot
+    connect(this, SIGNAL(renderedImage(QImage)), this, SLOT(setPicture(QImage)));
+
+    setAutoFillBackground(true);
+}
+
+VideoStreamer::VideoStreamer(string device) : QMainWindow(0), ui(new Ui::VideoStreamer)
+{
+    v4l2_device_param p = {};
+    p.dev_name = device;
+
+    _capture.reset(new V4L2Device(p));
+
+    ui->setupUi(this);
+
+    _width =  (int) _capture->getWidth();
+    _height = (int) _capture->getHeight();
+    _stride = (int) _capture->getStride();
+
+    _capture->setCallback([&](const Buffer& buffer, const struct v4l2_buffer& buffer_info) {
+
+        QImage img = QImage(_width, _height, QImage::Format_RGB888);
+
+        unsigned char *rgb_data = img.bits();
+
+        v4lconvert_yuyv_to_rgb24((const unsigned char*) buffer.data, rgb_data, _width, _height, _stride);
 
         emit renderedImage(img);
     });
