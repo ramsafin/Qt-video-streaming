@@ -146,6 +146,7 @@ void V4L2Device::query_format() {
 
     // query format
     if (v4l2_ioctl(_fd, VIDIOC_S_FMT, &format) == -1) {
+        cerr << strerror(errno) << endl;
         throw runtime_error("VIDIOC_S_FMT");
     }
 

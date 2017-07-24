@@ -5,6 +5,8 @@
 #include <QMainWindow>
 #include <QPixmap>
 #include "v4l2device.h"
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 using namespace std;
 
@@ -17,7 +19,7 @@ class VideoStreamer : public QMainWindow
     Q_OBJECT
 
 public:
-    VideoStreamer(const v4l2_device_param&, bool mainCamera = false, QWidget *parent = 0);
+    VideoStreamer(v4l2_device_param, bool mainCamera = false, QWidget *parent = 0);
     ~VideoStreamer();
 
     QPixmap pixmap;
