@@ -36,14 +36,19 @@ VideoStreamer::VideoStreamer(v4l2_device_param param, bool mainCamera, QWidget *
 
       _capture->setCallback([&](const Buffer& buffer, const struct v4l2_buffer& buffer_info) {
 
-          QImage img = QImage(_width, _height, QImage::Format_Indexed8);
+          cv::Mat bayer8 =  cv::Mat(_height, _width, CV_8UC1, (uchar*) buffer.data);
+          cv::Mat rgb8 =  cv::Mat(_height, _width, CV_8UC3);
 
-          cv::Mat bayer8 = new cv::Mat(_height, _width, CV_8UC1, buffer.data);
-          cv::Mat rgb8 = new cv::Mat(_height, _width, CV_8UC3);
+          cv::cvtColor(bayer8, rgb8, CV_BayerGB2RGB);
 
+          cv::Mat result = cv::Mat(_height, _width, CV_8UC3);
 
+          cv::cvtColor(rgb8, result, CV_BGR2RGB);
 
-          cv::cvtColor(*bayer8, *rgb8, CV_BayerGR2RGB);
+          QImage img = QImage((const uchar*) result.data, result.cols,
+                              result.rows, result.step1(), QImage::Format_RGB888);
+
+          img.bits();
 
           emit renderedImage(img);
         });

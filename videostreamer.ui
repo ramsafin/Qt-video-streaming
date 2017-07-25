@@ -17,8 +17,8 @@
    <widget class="QPushButton" name="streamButton">
     <property name="geometry">
      <rect>
-      <x>330</x>
-      <y>490</y>
+      <x>0</x>
+      <y>0</y>
       <width>131</width>
       <height>61</height>
      </rect>

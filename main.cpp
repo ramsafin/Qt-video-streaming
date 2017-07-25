@@ -4,36 +4,31 @@
 int main(int argc, char *argv[])
 {
 
-    QApplication app(argc, argv);
+  QApplication app(argc, argv);
 
-    // ============== main camera ================== //
+  v4l2_device_param p = {};
 
-//    p.dev_name = "/dev/video0";
-//    p.denominator = 50;
-//    p.numerator = 1;
-//    p.n_buffers = 32; /* max number of buffers */
+  p.dev_name = "/dev/v4l/by-id/usb-Twiga_TWIGACam-video-index0";
+  VideoStreamer frontCenterCamera(p, true);
 
-//    VideoStreamer streamer1(p, true);
+  p.pixel_format = V4L2_PIX_FMT_SGRBG8;
+  p.dev_name ="/dev/v4l/by-id/usb-The_Imaging_Source_Europe_GmbH_DFM_22BUC03-ML_03610446-video-index0";
+  VideoStreamer leftFrontCamera(p);
 
-    // ============== 3 additional cameras ============== //
 
-    v4l2_device_param p = {};
+  p.dev_name = "/dev/v4l/by-id/usb-The_Imaging_Source_Europe_GmbH_DFM_22BUC03-ML_03610450-video-index0";
+  VideoStreamer backCamera(p);
 
-    p.pixel_format = V4L2_PIX_FMT_SGRBG8;
+  p.dev_name = "/dev/v4l/by-id/usb-The_Imaging_Source_Europe_GmbH_DFM_22BUC03-ML_03610453-video-index0";
+  VideoStreamer rightFrontCamera(p);
 
-    p.dev_name = "/dev/video3";
-    p.denominator = 60;
-    p.numerator = 1;
-    p.n_buffers =32;
-    p.height = 480;
-    p.width = 744;
+//  rightFrontCamera.show();
 
-    VideoStreamer streamer3(p);
+//  backCamera.show();
 
-    // =============================== //
+//  leftFrontCamera.show();
 
-    streamer3.show();
-//    streamer0.show();
+//  frontCenterCamera.show();
 
-    return app.exec();
+  return app.exec();
 }

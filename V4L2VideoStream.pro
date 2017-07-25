@@ -50,9 +50,10 @@ LIBS += \
     -L$$LIBS_PATH \
     -lopencv_core \
     -lopencv_imgproc \
-    -lopencv_highgui
+    -lopencv_imgcodecs
 
 INCLUDEPATH += \
     $$OPENCV_PATH/modules/core/include/ \
     $$OPENCV_PATH/modules/imgproc/include/ \
-    $$OPENCV_PATH/modules/highgui/include/
+    $$OPENCV_PATH/modules/highgui/include/ \
+    $$OPENCV_PATH/modules/imgcodecs/include
