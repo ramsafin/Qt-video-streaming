@@ -7,7 +7,7 @@
 QT       += core gui
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
-
+OPE
 TARGET = V4L2VideoStream
 TEMPLATE = app
 
@@ -30,9 +30,30 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
         main.cpp \
-    v4l2device.cpp
+    v4l2device.cpp \
+    videostreamer.cpp
 
 HEADERS += \
-    v4l2device.h
+    v4l2device.h \
+    videostreamer.h
 
-FORMS +=
+FORMS += \
+    videostreamer.ui
+
+# OpenCV
+
+OPENCV_PATH = "/home/robot/opencv-3.2.0"
+
+LIBS_PATH = /usr/local/lib
+
+LIBS += \
+    -L$$LIBS_PATH \
+    -lopencv_core \
+    -lopencv_imgproc \
+    -lopencv_imgcodecs
+
+INCLUDEPATH += \
+    $$OPENCV_PATH/modules/core/include/ \
+    $$OPENCV_PATH/modules/imgproc/include/ \
+    $$OPENCV_PATH/modules/highgui/include/ \
+    $$OPENCV_PATH/modules/imgcodecs/include

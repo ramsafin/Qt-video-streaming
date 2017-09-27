@@ -1,31 +1,34 @@
-#include "v4l2device.h"
-#include <thread>
-#include <chrono>
+#include <QApplication>
+#include "videostreamer.h"
 
 int main(int argc, char *argv[])
 {
 
-    v4l2_device_param p;
+  QApplication app(argc, argv);
 
-    p.height = 720;
-    p.width = 1280;
-    p.n_buffers = 15;
+  v4l2_device_param p = {};
 
-    V4L2Device device(p);
+  p.dev_name = "/dev/v4l/by-id/usb-Twiga_TWIGACam-video-index0";
+  VideoStreamer frontCenterCamera(p, true);
 
-    device.startCapturing();
+  p.pixel_format = V4L2_PIX_FMT_SGRBG8;
+  p.dev_name ="/dev/v4l/by-id/usb-The_Imaging_Source_Europe_GmbH_DFM_22BUC03-ML_03610446-video-index0";
+  VideoStreamer leftFrontCamera(p);
 
-    std::this_thread::sleep_for(std::chrono::seconds(4));
 
-    device.stopCapturing();
+  p.dev_name = "/dev/v4l/by-id/usb-The_Imaging_Source_Europe_GmbH_DFM_22BUC03-ML_03610450-video-index0";
+  VideoStreamer backCamera(p);
 
-    std::this_thread::sleep_for(std::chrono::seconds(4));
+  p.dev_name = "/dev/v4l/by-id/usb-The_Imaging_Source_Europe_GmbH_DFM_22BUC03-ML_03610453-video-index0";
+  VideoStreamer rightFrontCamera(p);
 
-    device.startCapturing();
+//  rightFrontCamera.show();
 
-    std::this_thread::sleep_for(std::chrono::seconds(4));
+//  backCamera.show();
 
-    std::cout << "end" << std::endl;
+//  leftFrontCamera.show();
 
-    return 0;
+//  frontCenterCamera.show();
+
+  return app.exec();
 }
